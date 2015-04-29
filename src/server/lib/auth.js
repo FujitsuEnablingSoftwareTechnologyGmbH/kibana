@@ -1,10 +1,17 @@
 var config = require('../config');
-var httpAuth = require('http-auth');
+
 module.exports = function () {
-  var basic;
+
   if (config.htpasswd) {
-    basic = httpAuth.basic({ file: config.htpasswd });
-    return httpAuth.connect(basic);
+    var httpAuth = require('http-auth'),
+        backend = httpAuth.basic({file: config.htpasswd});
+    return httpAuth.connect(backend);
+  } else if (config.keystone) {
+    return require('./keystone/auth');
   }
-  return function (req, res, next) { return next(); };
+
+  return function (req, res, next) {
+    return next();
+  };
+
 };

@@ -51,3 +51,13 @@ verify_ssl: true
 
 # Set the path to where you would like the process id file to be created.
 # pid_file: /var/run/kibana.pid
+
+# If you would like to send the log output to a file you can set the path below. 
+# This will also turn off the STDOUT log output.
+# log_file: ./kibana.log
+
+keystone:
+  # v2.0 is highest possible version for Identity at vm, consider updating and switching to v3.0
+  keystone_url: http://192.168.10.5:${port}/v2.0
+  admin_port  : 35357
+  user_port   : 5000

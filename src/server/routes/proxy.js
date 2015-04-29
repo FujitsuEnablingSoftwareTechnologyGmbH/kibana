@@ -133,3 +133,4 @@ router.use(function (req, res, next) {
   esRequest.pipe(res);
 });
 
+    esRequest.pipe(res);
