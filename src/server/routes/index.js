@@ -2,7 +2,6 @@ var express = require('express');
 var router = express.Router();
 var config = require('../config');
 var _ = require('lodash');
-var keystoneHeaderOkKey = require('../lib/keystone/auth').resHeaderKey;
 
 router.get('/config', function (req, res, next) {
     var keys = [
@@ -14,14 +13,5 @@ router.get('/config', function (req, res, next) {
     data.plugins = config.plugins;
     res.json(data);
 });
-
-// on / make sure that request was authenticated with keystone authenticate with keystone
-router.get('/', function (req, res, next) {
-    if (res.header(keystoneHeaderOkKey)) {
-        return res.render('index');
-    }
-    return next();
-});
-
 
 module.exports = router;

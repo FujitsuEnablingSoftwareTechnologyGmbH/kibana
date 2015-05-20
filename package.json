@@ -59,7 +59,8 @@
     "request": "^2.40.0",
     "requirefrom": "^0.2.0",
     "semver": "^4.2.0",
-    "serve-favicon": "~2.2.0"
+    "serve-favicon": "~2.2.0",
+    "express-session": "1.11.x"
   },
   "devDependencies": {
     "connect": "~2.19.5",

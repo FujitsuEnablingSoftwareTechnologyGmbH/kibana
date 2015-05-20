@@ -1,14 +1,15 @@
 var Promise = require('bluebird'),
   _ = require('lodash'),
   config = require('../../config').keystone,
-  keystoneUtil = require('./util');
+  keystoneUtil = require('./util'),
+  logger = require('../logger');
 
 /**
  * Token key expected to be found among headers of the kibana request
  * @type {string}
  */
-var tokenKey = 'X-Keystone-Token',
-  resHeaderKey = 'X-Keystone-Ok',
+var keystoneHeaderName = 'X-Keystone-Token',
+  responseHeaderKey = 'X-Keystone-Ok',
   ignoredAccepts = [
     'text/css',
     'text/js',
@@ -21,45 +22,73 @@ var tokenKey = 'X-Keystone-Token',
 
 module.exports = function (req, res, next) {
   if (shouldIgnore(req)) {
-    console.log('Ignored request for ' + req.path);
     return next();
+  } else {
+    logger.debug('Accepted request [' + req.path + ']');
   }
 
   var session = req.session,
-    token = getToken(req);
+    token = handleToken(req),
+    port = config.admin_port,
+    keystoneHeader = {
+      headers: {
+        'X-Auth-Token'   : token,
+        'X-Subject-Token': token
+      }
+    };
 
   /*
    TODO 1 - how can we know that retrieving token yet again is not good idea
    TODO 2 - how to get information about token [expiration date for instance]
+
+   Following items will be covered in future releases of keystone-v3-client and handled
+   automatically if possible
    */
 
-  keystoneUtil.getKeystoneClient(config.admin_port).validateToken(token, validateTokenCb);
+  keystoneUtil
+    .getKeystoneTokens(port)
+    .check(keystoneHeader) // lean method to verify if token is valid
+    .then(tokenValid, tokenInvalid);
 
-  function validateTokenCb(err, data) {
-    if (err) {
-      console.log('Keystone authentication not ok');
+  function tokenValid() {
+    res.header(responseHeaderKey, true);
 
-      res.header('X-Keystone-Ok', false);
-      res.status(403).json(err);
+    // TODO check if is good, perhaps we should only call get all projects and check not_authorized, one request less ??
+    keystoneUtil
+      .getKeystoneProjects(port)
+      .all(keystoneHeader) // retrieve all possible tenants
+      .then(projectsOk, projectsFail);
 
-    } else {
-      console.log('Keystone authentication ok');
-
-      session.tenants = data.tenants;
-
-      if (!res.headersSent) {
-        // add header informing that accepted request has been authenticated
-        res.header('X-Keystone-Ok', true);
-      }
+    function projectsOk(response) {
+      session.tenants = getTenants(response.data.projects);
       next();
     }
 
+    function projectsFail(response) {
+      next(asError(response, 'Failed to retrieve projects'));
+    }
+
+    function getTenants(tenants) {
+      return _.pluck(tenants || [], 'name'); // pick names only
+    }
+  }
+
+  function tokenInvalid(response) {
+    res.header(responseHeaderKey, false);
+
+    delete session.tenants;
+    delete session.token;
+
+    next(asError(response, 'Token ' + token + ' not valid'));
+  }
+
+  function asError(err, msg) {
+    var responseError = new Error(msg);
+    responseError.status = err.statusCode;
+    return responseError;
   }
 
 };
-
-module.exports.tokenKey = tokenKey;
-module.exports.resHeaderKey = resHeaderKey;
 
 function shouldIgnore(req) {
 
@@ -80,38 +109,30 @@ function shouldIgnore(req) {
   return false;
 
   function ignoreAccept() {
-    var accept = req.accepts(), // array here
-      ignore = false;
-
-    _.forEachRight(accept, function (act) {
-      // iterate over accept values from request
-      ignore = _.findIndex(ignoredAccepts, function (val) {
-          return act.indexOf(val) >= 0;
-        }) >= 0;
-      if (ignore) {
-        // stop loop
-        return false;
-      }
-    });
-
-    return ignore;
+    return req.is(ignoredAccepts);
   }
 
   function ignorePath() {
-    var path = req.path;
-    return _.indexOf(acceptedPaths, path) < 0;
+    return _.indexOf(acceptedPaths, req.path) < 0;
   }
 }
 
 
 /**
- * Retrieves the token. Note that token shoule be passed
- * @param req
+ * Retrieves token from the response header using key <b>X-Keystone-Token</b>.
+ * If token is found there following actions are taken:
+ * - if token is not in session, it is set there
+ * - if token is in session but it differs from the one in request's header, session's token is replaced with new one
+ * If token is not found in request following actions are taken:
+ * - if token is also not available in session, error is produced
+ * - if token is available in session it is used
+ *
+ * @param req current request
  */
-function getToken(req) {
+function handleToken(req) {
   var session = req.session,
     tokenSession = session.token,
-    token = req.header(tokenKey) || req.query.token;
+    token = req.header(keystoneHeaderName) || req.query.token;
 
   if (!token && !tokenSession) {
     throw new Error('Token hasn\'t been located, looked in headers and session');

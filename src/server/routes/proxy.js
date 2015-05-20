@@ -46,7 +46,7 @@ router.use(function (req, res, next) {
     validateRequest(req);
     return next();
   } catch (err) {
-    logger.error({ req: req }, err.message || 'Bad Request');
+    logger.error({req: req}, err.message || 'Bad Request');
     res.status(403).send(err.message || 'Bad Request');
   }
 });
@@ -72,11 +72,11 @@ router.use(function (req, res, next) {
   }
 
   var options = {
-    url: config.elasticsearch + path,
-    method: req.method,
-    headers: _.defaults({}, req.headers),
+    url      : config.elasticsearch + path,
+    method   : req.method,
+    headers  : _.defaults({}, req.headers),
     strictSSL: config.kibana.verify_ssl,
-    timeout: config.kibana.request_timeout
+    timeout  : config.kibana.request_timeout
   };
 
   options.headers['x-forward-for'] = req.connection.remoteAddress || req.socket.remoteAddress;
@@ -85,12 +85,12 @@ router.use(function (req, res, next) {
 
   // If the server has a custom CA we need to add it to the agent options
   if (customCA) {
-    options.agentOptions = { ca: [customCA] };
+    options.agentOptions = {ca: [customCA]};
   }
-  
+
   // Add client key and certificate for elasticsearch if needed.
   if (clientCrt && clientKey) {
-    if (! options.agentOptions ) {
+    if (!options.agentOptions) {
       options.agentOptions = {};
     }
     options.agentOptions.cert = clientCrt;
@@ -115,9 +115,9 @@ router.use(function (req, res, next) {
   // Create the request and pipe the response
   var esRequest = request(options);
   esRequest.on('error', function (err) {
-    logger.error({ err: err });
+    logger.error({err: err});
     var code = 502;
-    var body = { message: 'Bad Gateway' };
+    var body = {message: 'Bad Gateway'};
 
     if (err.code === 'ECONNREFUSED') {
       body.message = 'Unable to connect to Elasticsearch';
@@ -130,7 +130,7 @@ router.use(function (req, res, next) {
     body.err = err.message;
     if (!res.headersSent) res.status(code).json(body);
   });
-  esRequest.pipe(res);
-});
 
-    esRequest.pipe(res);
+  esRequest.pipe(res);
+
+});

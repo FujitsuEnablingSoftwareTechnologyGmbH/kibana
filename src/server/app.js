@@ -19,6 +19,12 @@ app.set('views', path.join(__dirname, 'views'));
 app.set('view engine', 'jade');
 app.set('x-powered-by', false);
 
+app.use(require('express-session')({
+  secret           : config.sessionSecret || require('crypto').randomBytes(16).toString('hex'),
+  resave           : true,
+  saveUninitialized: true
+}));
+
 app.use(requestLogger());
 app.use(auth());
 app.use(appHeaders());
@@ -28,14 +34,11 @@ if (app.get('env') === 'development') {
   require('./dev')(app);
 }
 
-// The proxy must be set up before all the other middleware.
-// TODO: WE might want to move the middleware to each of the individual routes
-// so we don't have weird conflicts in the future.
 app.use('/elasticsearch', proxy);
 app.use('/enforcer', require('./lib/enforce'));
 
 app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(bodyParser.urlencoded({extended: false}));
 app.use(cookieParser());
 app.use(compression());
 app.use(express.static(config.public_folder));

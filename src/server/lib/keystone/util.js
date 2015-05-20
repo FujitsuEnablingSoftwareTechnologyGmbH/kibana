@@ -1,8 +1,10 @@
 var config = require('../../config').keystone,
   _ = require('lodash'),
-  KeystoneClient = require('keystone-client').KeystoneClient;
+  KeystoneClient = require('keystone-v3-client'),
+  cache = {};
 
-module.exports.getKeystoneClient = getKeystoneClient;
+module.exports.getKeystoneTokens = getKeystoneTokens;
+module.exports.getKeystoneProjects = getKeystoneProjects;
 module.exports.parseKeystoneError = parseKeystoneError;
 
 function parseKeystoneError(error) {
@@ -12,12 +14,28 @@ function parseKeystoneError(error) {
   };
 }
 
+function getKeystoneProjects(port) {
+  return getKeystoneClient(port).projects;
+}
+
+function getKeystoneTokens(port) {
+  return getKeystoneClient(port).tokens;
+}
+
 function getKeystoneClient(port) {
+  var keystoneUrlFn;
+  if (cache[port]) {
+    // client has been already created for given port
+    return cache[port];
+  }
   if (!port || port < 0) {
     throw new Error('port is undefined');
   }
-  var keystone_url = _.template(getUrl());
-  return new KeystoneClient(keystone_url({port: port}));
+
+  keystoneUrlFn = _.template(getUrl());
+  return cache[port] = new KeystoneClient({
+    url: keystoneUrlFn({port: port})
+  });
 }
 
 function getUrl() {
