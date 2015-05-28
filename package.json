@@ -53,6 +53,7 @@
     "http-auth": "^2.2.5",
     "jade": "~1.8.2",
     "js-yaml": "^3.2.5",
+    "keystone-v3-client": "git+ssh://git@estscm1.intern.est.fujitsu.com:teammonitoring/keystone-v3-client.git#master",
     "less-middleware": "1.0.x",
     "lodash": "^2.4.1",
     "morgan": "~1.5.1",

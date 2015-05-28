@@ -16,8 +16,8 @@ var keystoneHeaderName = 'X-Keystone-Token',
     'text/javascript'
   ],
   acceptedPaths = [
-    '/',
-    '/elasticsearch/' // TODO - requires tweaking, only /elasticsearch/ is validated, but /elasticsearch/_nodes is not
+    /^\/$/i,
+    /^\/elasticsearch\/?.*$/i
   ];
 
 module.exports = function (req, res, next) {
@@ -113,7 +113,12 @@ function shouldIgnore(req) {
   }
 
   function ignorePath() {
-    return _.indexOf(acceptedPaths, req.path) < 0;
+    var ignore = true,
+      arrayOfTruth = [];
+    _.forEachRight(acceptedPaths, function (regexp) {
+      arrayOfTruth.push(regexp.test(req.path));
+    });
+    return arrayOfTruth.indexOf(true) < 0;
   }
 }
 
