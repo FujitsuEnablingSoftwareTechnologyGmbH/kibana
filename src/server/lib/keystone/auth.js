@@ -8,8 +8,8 @@ var Promise = require('bluebird'),
  * Token key expected to be found among headers of the kibana request
  * @type {string}
  */
-var keystoneHeaderName = 'X-Keystone-Token',
-  responseHeaderKey = 'X-Keystone-Ok',
+var keystoneHeaderName = 'X-Auth-Token',
+  responseHeaderKey = 'X-Auth-Ok',
   ignoredAccepts = [
     'text/css',
     'text/js',
