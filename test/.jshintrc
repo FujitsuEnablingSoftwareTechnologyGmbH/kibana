@@ -16,6 +16,7 @@
     "before": true,
     "after": true,
     "expect": true,
+    "context": true,
 
     // require.js
     "define": true,

@@ -34,6 +34,7 @@ if (app.get('env') === 'development') {
   require('./dev')(app);
 }
 
+app.use('/elasticsearch', require('./lib/keystone'));
 app.use('/elasticsearch', proxy);
 app.use('/enforcer', require('./lib/enforce'));
 
