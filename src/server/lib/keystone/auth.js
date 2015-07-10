@@ -100,7 +100,9 @@ module.exports = function (req, res, next) {
         delete session.tenants;
         delete session.token;
 
-        next(asError(response, 'Token ' + token + ' not valid'));
+        console.log('Token ' + token + ' is not valid');
+
+        next(asError(response, "You're not logged in as a user who's authenticated to access log information"));
     }
 };
 

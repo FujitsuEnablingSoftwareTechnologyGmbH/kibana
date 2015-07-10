@@ -68,15 +68,16 @@ describe('lib/keystone/authHelper', function () {
 
     function handleToken() {
         it('should throw error if token not in header or session', function () {
-            var request = {
-                session: {},
-                header : sinon.stub().returns(undefined)
-            };
+            var expectedMsg = /You're not logged into the OpenStack. Please login via Horizon Dashboard/,
+                request = {
+                    session: {},
+                    header : sinon.stub().returns(undefined)
+                };
 
             expect(authHelper.handleToken)
                 .withArgs(request, KeystoneHeader)
                 .to
-                .throwException('Token hasn\'t been located, looked in headers and session');
+                .throwException(expectedMsg);
         });
 
         it('should use session token if requested does not have it', function () {

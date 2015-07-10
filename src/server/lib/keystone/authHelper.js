@@ -85,7 +85,10 @@ function handleToken(req, headerTokenKey) {
     var token = req.header(headerTokenKey);
 
     if (!token && !tokenSession) {
-        var error = new Error('Token hasn\'t been located, looked in headers and session');
+        var error = new Error("You're not logged into the OpenStack. Please login via Horizon Dashboard");
+
+        console.log('Token hasn\'t been located, looked in headers and session');
+
         error.status = 400; // bad request :(
         throw error;
     }
