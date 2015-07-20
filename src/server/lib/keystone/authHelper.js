@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright ${year} FUJITSU LIMITED
+ *  * Copyright 2015 FUJITSU LIMITED
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  * in compliance with the License. You may obtain a copy of the License at
@@ -15,6 +15,7 @@
  */
 
 var _ = require('lodash');
+var logger = require('../logger');
 
 // variables
 /**
@@ -85,9 +86,8 @@ function handleToken(req, headerTokenKey) {
     var token = req.header(headerTokenKey);
 
     if (!token && !tokenSession) {
-        var error = new Error("You're not logged into the OpenStack. Please login via Horizon Dashboard");
-
-        console.log('Token hasn\'t been located, looked in headers and session');
+        var error = new Error('You\'re not logged into the OpenStack. Please login via Horizon Dashboard');
+        logger.error('Token hasn\'t been located, looked in headers and session');
 
         error.status = 400; // bad request :(
         throw error;

@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright ${year} FUJITSU LIMITED
+ *  * Copyright 2015 FUJITSU LIMITED
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  * in compliance with the License. You may obtain a copy of the License at
@@ -43,26 +43,19 @@ describe('lib/keystone/authHelper', function () {
             });
         });
 
-        it('should not ignore / and /elasticsearch/* requests', function () {
-            var paths = [
-                '/',
-                '/elasticsearch/',
-                '/elasticsearch/a',
-                '/elasticsearch/a/b',
-                '/elasticsearch/a/b/c',
-                '/elasticsearch/a/b/c/d'
-            ];
+        it('should by default allow every request [ignore=false]', function () {
             var request;
 
-            paths.forEach(function (path) {
+            ['/', '/test', '/shall', '/ignore'].forEach(function (path) {
                 request = {
                     path: path,
                     is  : sinon
                         .stub()
-                        .returns(false)
+                        .returns(false) // false corresponds to non-ignores content-type value
                 };
                 expect(authHelper.canIgnoreRequest(request)).to.be(false);
             });
+
         });
     }
 

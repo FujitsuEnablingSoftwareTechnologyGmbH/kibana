@@ -1,6 +1,6 @@
 /*
  *
- *  * Copyright ${year} FUJITSU LIMITED
+ *  * Copyright 2015 FUJITSU LIMITED
  *  *
  *  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  * in compliance with the License. You may obtain a copy of the License at
@@ -100,9 +100,8 @@ module.exports = function (req, res, next) {
         delete session.tenants;
         delete session.token;
 
-        console.log('Token ' + token + ' is not valid');
-
-        next(asError(response, "You're not logged in as a user who's authenticated to access log information"));
+        logger.error('Token ' + token + ' is not valid');
+        next(asError(response, 'You\'re not logged in as a user who\'s authenticated to access log information'));
     }
 };
 
