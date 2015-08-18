@@ -61,7 +61,8 @@
     "requirefrom": "^0.2.0",
     "semver": "^4.2.0",
     "serve-favicon": "~2.2.0",
-    "express-session": "1.11.x"
+    "express-session": "1.11.x",
+    "mv": "~2"
   },
   "devDependencies": {
     "connect": "~2.19.5",

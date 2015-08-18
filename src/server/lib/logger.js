@@ -16,6 +16,17 @@ if (!config.quiet) {
   streams.push(stream);
 }
 
+if(config.logging && env !== 'development'){
+  streams.push({
+    type: 'rotating-file',
+    name: 'kibana-log-file-stream',
+    path: config.logging.path || '/var/log/kibana.log',
+    level: bunyan.resolveLevel(config.logging.level) || (config.quiet ? bunyan.ERROR : bunyan.DEBUG),
+    period: config.logging.rotatePeriod || '1w',
+    count: config.logging.logFileCount || 10
+  });
+}
+
 var logger = module.exports = bunyan.createLogger({
   name: 'Kibana',
   streams: streams,
