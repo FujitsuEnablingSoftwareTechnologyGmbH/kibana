@@ -16,6 +16,14 @@ define(function (require) {
 
         var resp = responses[i];
 
+        if (!resp || resp === null) {
+          notify.error('Encountered undefined response value.\n' +
+              'It may be a result of expired session or server down.\n' +
+              'Try to refresh your session.\n' +
+              'If problem persists contact system administrator.');
+          return req.handleFailure(new RequestFailure(null, resp));
+        }
+
         if (resp.timed_out) {
           notify.warning(new SearchTimeout());
         }
