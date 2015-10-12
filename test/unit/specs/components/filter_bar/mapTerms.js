@@ -1,27 +1,20 @@
-/* global sinon */
 define(function (require) {
   describe('Filter Bar Directive', function () {
     describe('mapTerms()', function () {
-
-			var indexPattern, mapTerms, $rootScope, getIndexPatternStub;
-			beforeEach(module('kibana'));
+      var sinon = require('test_utils/auto_release_sinon');
+      var mapTerms, $rootScope;
+      beforeEach(module('kibana'));
 
       beforeEach(function () {
-        getIndexPatternStub = sinon.stub();
         module('kibana/courier', function ($provide) {
-          $provide.service('courier', function () {
-            var courier = { indexPatterns: { get: getIndexPatternStub } };
-            return courier;
-          });
+          $provide.service('courier', require('fixtures/mock_courier'));
         });
       });
 
-      beforeEach(inject(function (Private, _$rootScope_, Promise) {
-				$rootScope = _$rootScope_;
-				mapTerms = Private(require('components/filter_bar/lib/mapTerms'));
-        indexPattern = Private(require('fixtures/stubbed_logstash_index_pattern'));
-        getIndexPatternStub.returns(Promise.resolve(indexPattern));
-			}));
+      beforeEach(inject(function (Private, _$rootScope_) {
+        $rootScope = _$rootScope_;
+        mapTerms = Private(require('components/filter_bar/lib/mapTerms'));
+      }));
 
       it('should return the key and value for matching filters', function (done) {
         var filter = { meta: { index: 'logstash-*' }, query: { match: { _type: { query: 'apache', type: 'phrase' } } } };

@@ -43,6 +43,7 @@ define(function (require) {
 
       // the id of the document
       self.id = config.id || void 0;
+      self.defaults = config.defaults;
 
       /**
        * Asynchronously initialize this object - will only run
@@ -91,58 +92,7 @@ define(function (require) {
 
           // fetch the object from ES
           return docSource.fetch()
-          .then(function applyESResp(resp) {
-
-            self._source = _.cloneDeep(resp._source);
-
-            if (!resp.found) throw new errors.SavedObjectNotFound(type, self.id);
-
-            var meta = resp._source.kibanaSavedObjectMeta || {};
-            delete resp._source.kibanaSavedObjectMeta;
-
-            if (!config.indexPattern && self._source.indexPattern) {
-              config.indexPattern = self._source.indexPattern;
-              delete self._source.indexPattern;
-            }
-
-            // assign the defaults to the response
-            _.defaults(self._source, defaults);
-
-            // transform the source using _deserializers
-            _.forOwn(mapping, function ittr(fieldMapping, fieldName) {
-              if (fieldMapping._deserialize) {
-                self._source[fieldName] = fieldMapping._deserialize(self._source[fieldName], resp, fieldName, fieldMapping);
-              }
-            });
-
-            // Give obj all of the values in _source.fields
-            _.assign(self, self._source);
-
-            return Promise.try(function () {
-              // if we have a searchSource, set it's state based on the searchSourceJSON field
-              if (self.searchSource) {
-                var state = {};
-                try {
-                  state = JSON.parse(meta.searchSourceJSON);
-                } catch (e) {}
-
-                var oldState = self.searchSource.toJSON();
-                var fnProps = _.transform(oldState, function (dynamic, val, name) {
-                  if (_.isFunction(val)) dynamic[name] = val;
-                }, {});
-
-                self.searchSource.set(_.defaults(state, fnProps));
-              }
-            })
-            .then(hydrateIndexPattern)
-            .then(function () {
-              return Promise.cast(afterESResp.call(self, resp));
-            })
-            .then(function () {
-              // Any time obj is updated, re-call applyESResp
-              docSource.onUpdate().then(applyESResp, notify.fatal);
-            });
-          });
+          .then(self.applyESResp);
         })
         .then(function () {
           return customInit.call(self);
@@ -152,6 +102,62 @@ define(function (require) {
           return self;
         });
       });
+
+      self.applyESResp = function (resp) {
+        self._source = _.cloneDeep(resp._source);
+
+        if (resp.found != null && !resp.found) throw new errors.SavedObjectNotFound(type, self.id);
+
+        var meta = resp._source.kibanaSavedObjectMeta || {};
+        delete resp._source.kibanaSavedObjectMeta;
+
+        if (!config.indexPattern && self._source.indexPattern) {
+          config.indexPattern = self._source.indexPattern;
+          delete self._source.indexPattern;
+        }
+
+        // assign the defaults to the response
+        _.defaults(self._source, defaults);
+
+        // transform the source using _deserializers
+        _.forOwn(mapping, function ittr(fieldMapping, fieldName) {
+          if (fieldMapping._deserialize) {
+            self._source[fieldName] = fieldMapping._deserialize(self._source[fieldName], resp, fieldName, fieldMapping);
+          }
+        });
+
+        // Give obj all of the values in _source.fields
+        _.assign(self, self._source);
+
+        return Promise.try(function () {
+          parseSearchSource(meta.searchSourceJSON);
+        })
+        .then(hydrateIndexPattern)
+        .then(function () {
+          return Promise.cast(afterESResp.call(self, resp));
+        })
+        .then(function () {
+          // Any time obj is updated, re-call applyESResp
+          docSource.onUpdate().then(self.applyESResp, notify.fatal);
+        });
+      };
+
+      function parseSearchSource(searchSourceJson) {
+        if (!self.searchSource) return;
+
+        // if we have a searchSource, set its state based on the searchSourceJSON field
+        var state = {};
+        try {
+          state = JSON.parse(searchSourceJson);
+        } catch (e) {}
+
+        var oldState = self.searchSource.toJSON();
+        var fnProps = _.transform(oldState, function (dynamic, val, name) {
+          if (_.isFunction(val)) dynamic[name] = val;
+        }, {});
+
+        self.searchSource.set(_.defaults(state, fnProps));
+      }
 
       /**
        * After creation or fetching from ES, ensure that the searchSources index indexPattern
@@ -181,14 +187,12 @@ define(function (require) {
         });
       }
 
-
       /**
-       * Save this object
+       * Serialize this object
        *
-       * @return {Promise}
-       * @resolved {String} - The id of the doc
+       * @return {Object}
        */
-      self.save = function () {
+      self.serialize = function () {
         var body = {};
 
         _.forOwn(mapping, function (fieldMapping, fieldName) {
@@ -205,6 +209,18 @@ define(function (require) {
           };
         }
 
+        return body;
+      };
+
+      /**
+       * Save this object
+       *
+       * @return {Promise}
+       * @resolved {String} - The id of the doc
+       */
+      self.save = function () {
+
+        var body = self.serialize();
 
         // Slugify the object id
         self.id = slugifyId(self.id);
@@ -226,14 +242,22 @@ define(function (require) {
             return self.id;
           });
         };
+
         return docSource.doCreate(source)
         .then(finish)
         .catch(function (err) {
-          var confirmMessage = 'Are you sure you want to overwrite this?';
-          if (_.deepGet(err, 'origError.status') === 409 && window.confirm(confirmMessage)) {
-            return docSource.doIndex(source).then(finish);
+          // record exists, confirm overwriting
+          if (_.deepGet(err, 'origError.status') === 409) {
+            var confirmMessage = 'Are you sure you want to overwrite ' + self.title + '?';
+
+            if (window.confirm(confirmMessage)) {
+              return docSource.doIndex(source).then(finish);
+            }
+
+            // if the user doesn't overwrite record, just swallow the error
+            return;
           }
-          return Promise.resolve(false);
+          return Promise.reject(err);
         });
       };
 
@@ -264,7 +288,6 @@ define(function (require) {
           });
         });
       };
-
     }
 
     return SavedObject;

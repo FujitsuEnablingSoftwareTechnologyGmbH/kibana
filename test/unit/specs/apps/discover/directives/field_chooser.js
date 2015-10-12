@@ -8,16 +8,26 @@ define(function (require) {
   require('services/private');
   require('plugins/discover/components/field_chooser/field_chooser');
 
-  var $parentScope, $scope, config, indexPattern;
+  var $parentScope;
+  var $scope;
+  var config;
+  var hits;
+  var indexPattern;
+  var indexPatternList;
 
   // Sets up the directive, take an element, and a list of properties to attach to the parent scope.
   var init = function ($elem, props) {
-    inject(function ($rootScope, $compile, _config_) {
+    inject(function ($rootScope, $compile, $timeout, _config_) {
       config = _config_;
       $parentScope = $rootScope;
       _.assign($parentScope, props);
       $compile($elem)($parentScope);
-      $elem.scope().$digest();
+
+      // Required for test to run solo. Sigh
+      $timeout(function () {
+        $elem.scope().$digest();
+      }, 0);
+
       $scope = $elem.isolateScope();
     });
   };
@@ -30,11 +40,13 @@ define(function (require) {
   describe('discover field chooser directives', function () {
     var $elem = angular.element(
       '<disc-field-chooser' +
-      '  fields="fields"' +
+      '  columns="columns"' +
       '  toggle="toggle"' +
-      '  data="data"' +
+      '  hits="hits"' +
+      '  field-counts="fieldCounts"' +
       '  filter="filter"' +
       '  index-pattern="indexPattern"' +
+      '  index-pattern-list="indexPatternList"' +
       '  state="state">' +
       '</disc-field-chooser>'
     );
@@ -42,19 +54,25 @@ define(function (require) {
     beforeEach(module('kibana'));
     beforeEach(function () {
       inject(function (Private) {
+        hits = Private(require('fixtures/hits'));
         indexPattern = Private(require('fixtures/stubbed_logstash_index_pattern'));
+        indexPatternList = [ 'b', 'a', 'c' ];
       });
 
-      var hits = _.each(require('fixtures/hits.js'), function (hit) {
-        hit.$$_flattened = indexPattern.flattenSearchResponse(hit._source);
-      });
+      var fieldCounts = _.transform(hits, function (counts, hit) {
+        _(indexPattern.flattenHit(hit)).keys().each(function (key) {
+          counts[key] = (counts[key] || 0) + 1;
+        });
+      }, {});
 
       init($elem, {
-        fields: _.map(indexPattern.fields.raw, function (v, i) { return _.merge(v, {display: false, rowCount: i}); }),
+        columns: [],
         toggle: sinon.spy(),
-        data: hits,
+        hits: hits,
+        fieldCounts: fieldCounts,
         filter: sinon.spy(),
-        indexPattern: indexPattern
+        indexPattern: indexPattern,
+        indexPatternList: indexPatternList
       });
 
       $scope.$digest();
@@ -71,6 +89,13 @@ define(function (require) {
         unpopular: $('.discover-unpopular-fields', ctx),
       };
     };
+
+    describe('Index list', function () {
+      it('should be in alphabetical order', function (done) {
+        expect($elem.find('li.sidebar-item-title').text()).to.be('abc');
+        done();
+      });
+    });
 
     describe('Field listing', function () {
       it('should have Selected Fields, Fields and Popular Fields sections', function (done) {
@@ -89,7 +114,7 @@ define(function (require) {
         expect(section.popular.text()).to.not.contain('ip\n');
 
         expect(section.unpopular.text()).to.contain('extension');
-        expect(section.unpopular.text()).to.contain('area');
+        expect(section.unpopular.text()).to.contain('machine.os');
         expect(section.unpopular.text()).to.not.contain('ssl');
         done();
       });
@@ -103,35 +128,36 @@ define(function (require) {
       });
 
       it('should not show the popular fields if there are not any', function (done) {
+
         // Re-init
         destroy();
+
+        _.each(indexPattern.fields, function (field) { field.$$spec.count = 0;}); // Reset the popular fields
         init($elem, {
-          fields: _.filter(
-            _.map(indexPattern.fields.raw, function (v, i) { return _.merge(v, {display: false, rowCount: i}); }),
-            {count: 0}
-          ),
+          columns: [],
           toggle: sinon.spy(),
-          data: require('fixtures/hits'),
+          hits: require('fixtures/hits'),
           filter: sinon.spy(),
           indexPattern: indexPattern
         });
 
         var section = getSections($elem);
-        // Remove the popular fields
+
         $scope.$digest();
         expect(section.popular.hasClass('ng-hide')).to.be(true);
         expect(section.popular.find('li:not(.sidebar-list-header)').length).to.be(0);
         done();
       });
 
-      it('should move the field into selected when setting field.display', function (done) {
+      it('should move the field into selected when it is added to the columns array', function (done) {
         var section = getSections($elem);
-        indexPattern.fields.byName.bytes.display = true;
+        $scope.columns.push('bytes');
         $scope.$digest();
+
         expect(section.selected.text()).to.contain('bytes');
         expect(section.popular.text()).to.not.contain('bytes');
 
-        indexPattern.fields.byName.ip.display = true;
+        $scope.columns.push('ip');
         $scope.$digest();
         expect(section.selected.text()).to.contain('ip\n');
         expect(section.unpopular.text()).to.not.contain('ip\n');
@@ -144,73 +170,65 @@ define(function (require) {
 
     describe('details processing', function () {
       var field;
+      function getField() { return _.find($scope.fields, { name: 'bytes' }); }
 
       beforeEach(function () {
-        field = indexPattern.fields.byName.bytes;
+        field = getField();
       });
 
-      afterEach(function () {
-        delete field.details;
-      });
-
-      it('should have a details function', function (done) {
+      it('should have a details function', function () {
         expect($scope.details).to.be.a(Function);
-        done();
       });
 
-      it('should increase the field popularity when called', function (done) {
-        var counter = field.count;
+      it('should increase the field popularity when called', function () {
         indexPattern.popularizeField = sinon.spy();
         $scope.details(field);
         expect(indexPattern.popularizeField.called).to.be(true);
-        done();
       });
 
-      it('should append a details object to the field', function (done) {
+      it('should append a details object to the field', function () {
         $scope.details(field);
         expect(field.details).to.not.be(undefined);
-        done();
       });
 
-      it('should delete the field details if they already exist', function (done) {
+      it('should delete the field details if they already exist', function () {
         $scope.details(field);
         expect(field.details).to.not.be(undefined);
         $scope.details(field);
         expect(field.details).to.be(undefined);
-        done();
       });
 
-      it('... unless recompute is true', function (done) {
+      it('... unless recompute is true', function () {
         $scope.details(field);
         expect(field.details).to.not.be(undefined);
         $scope.details(field, true);
         expect(field.details).to.not.be(undefined);
-        done();
       });
 
-      it('should create buckets with formatted and raw values', function (done) {
+      it('should create buckets with formatted and raw values', function () {
         $scope.details(field);
         expect(field.details.buckets).to.not.be(undefined);
-        expect(field.details.buckets[0].value).to.be(40.1415926535);
-        expect(field.details.buckets[0].display).to.be(40.142);
-        done();
+        expect(field.details.buckets[0].value).to.be(40.141592);
+        expect(field.details.buckets[0].display).to.be('40.142');
       });
 
 
-      it('should recalculate the details on open fields if the data changes', function () {
-        $scope.details(field);
-        sinon.stub($scope, 'details');
-        $scope.data = [];
+      it('should recalculate the details on open fields if the hits change', function () {
+        $scope.hits = [
+          { _source: { bytes: 1024 } }
+        ];
         $scope.$apply();
-        expect($scope.details.called).to.be(true);
-        $scope.details.restore();
 
-        // close the field, make sure details isnt called again
+        field = getField();
         $scope.details(field);
-        sinon.stub($scope, 'details');
-        $scope.data = ['foo'];
+        expect(getField().details.total).to.be(1);
+
+        $scope.hits = [
+          { _source: { notbytes: 1024 } }
+        ];
         $scope.$apply();
-        expect($scope.details.called).to.be(false);
+        field = getField();
+        expect(field.details).to.not.have.property('total');
       });
     });
   });

@@ -1,11 +1,11 @@
 define(function (require) {
   var _ = require('lodash');
 
-  var getFieldValues = function (data, field) {
+  var getFieldValues = function (hits, field) {
     var name = field.name;
-
-    return _.map(data, function (row) {
-      return row.$$_flattened[name] == null ? row[name] : row.$$_flattened[name];
+    var flattenHit = field.indexPattern.flattenHit;
+    return _.map(hits, function (hit) {
+      return flattenHit(hit)[name];
     });
   };
 
@@ -23,10 +23,8 @@ define(function (require) {
       return { error: 'Analysis is not available for geo fields.' };
     }
 
-    var allValues = getFieldValues(params.data, params.field),
-      exists = 0,
-      counts;
-
+    var allValues = getFieldValues(params.hits, params.field);
+    var counts;
     var missing = _countMissing(allValues);
 
     try {
@@ -37,11 +35,11 @@ define(function (require) {
           return {
             value: bucket.value,
             count: bucket.count,
-            percent: (bucket.count / (params.data.length - missing) * 100).toFixed(1)
+            percent: (bucket.count / (params.hits.length - missing) * 100).toFixed(1)
           };
         });
 
-      if (params.data.length - missing === 0) {
+      if (params.hits.length - missing === 0) {
         return {
           error: 'This field is present in your elasticsearch mapping' +
             ' but not in any documents in the search results.' +
@@ -50,8 +48,8 @@ define(function (require) {
       }
 
       return {
-        total: params.data.length,
-        exists: params.data.length - missing,
+        total: params.hits.length,
+        exists: params.hits.length - missing,
         missing: missing,
         buckets: counts,
       };
@@ -68,13 +66,10 @@ define(function (require) {
 
 
   var _groupValues = function (allValues, params) {
-    var groups = {},
-    value, k;
+    var groups = {};
+    var k;
 
-    for (var i = 0; i < allValues.length; ++i) {
-
-      value = allValues[i];
-
+    allValues.forEach(function (value) {
       if (_.isObject(value) && !_.isArray(value)) {
         throw new Error('Analysis is not available for object fields');
       }
@@ -85,7 +80,6 @@ define(function (require) {
         k = value == null ? undefined : [value];
       }
 
-      /* jshint -W083 */
       _.each(k, function (key) {
         if (_.has(groups, key)) {
           groups[key].count++;
@@ -96,7 +90,8 @@ define(function (require) {
           };
         }
       });
-    }
+    });
+
     return groups;
   };
 

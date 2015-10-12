@@ -8,7 +8,6 @@ define(function (require) {
     var _ = require('lodash');
     var $ = require('jquery');
     var aggTypes = Private(require('components/agg_types/index'));
-    var aggSelectHtml = require('text!plugins/visualize/editor/agg_select.html');
     var advancedToggleHtml = require('text!plugins/visualize/editor/advanced_toggle.html');
 
     var notify = new Notifier({
@@ -16,10 +15,18 @@ define(function (require) {
     });
 
     return {
-      restrict: 'E',
+      restrict: 'A',
       template: require('text!plugins/visualize/editor/agg.html'),
-      link: function ($scope, $el) {
-        $scope.editorOpen = $scope.agg.brandNew;
+      require: 'form',
+      link: function ($scope, $el, attrs, kbnForm) {
+        $scope.$bind('outputAgg', 'outputVis.aggs.byId[agg.id]', $scope);
+        $scope.editorOpen = !!$scope.agg.brandNew;
+
+        $scope.$watch('editorOpen', function (open) {
+          // make sure that all of the form inputs are "touched"
+          // so that their errors propogate
+          if (!open) kbnForm.$setTouched();
+        });
 
         $scope.$watchMulti([
           '$index',
@@ -53,6 +60,15 @@ define(function (require) {
           if (index === -1) return notify.log('already removed');
 
           aggs.splice(index, 1);
+        };
+
+        $scope.canRemove = function (aggregation) {
+          var metricCount = _.reduce($scope.group, function (count, agg) {
+            return (agg.schema.name === aggregation.schema.name) ? ++count : count;
+          }, 0);
+
+          // make sure the the number of these aggs is above the min
+          return metricCount > aggregation.schema.min;
         };
 
         function calcAggIsTooLow() {

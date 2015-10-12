@@ -6,6 +6,7 @@ define(function (require) {
     var AggType;
     var AggConfig;
     var indexPattern;
+    var fieldFormat;
 
     beforeEach(module('kibana'));
     beforeEach(inject(function (Private) {
@@ -13,6 +14,7 @@ define(function (require) {
       AggType = Private(require('components/agg_types/_agg_type'));
       AggConfig = Private(require('components/vis/_agg_config'));
       indexPattern = Private(require('fixtures/stubbed_logstash_index_pattern'));
+      fieldFormat = Private(require('registry/field_formats'));
     }));
 
     describe('#toDsl', function () {
@@ -204,6 +206,84 @@ define(function (require) {
         expect(state.params).to.be.an('object');
         expect(state).to.have.property('type', 'date_histogram');
         expect(state).to.have.property('schema', 'segment');
+      });
+    });
+
+    describe('#fieldFormatter', function () {
+      it('returns the fields format unless the agg type has a custom getFormat handler', function () {
+        var vis = new Vis(indexPattern, {
+          type: 'histogram',
+          aggs: [
+            {
+              type: 'date_histogram',
+              schema: 'segment',
+              params: { field: '@timestamp' }
+            }
+          ]
+        });
+        expect(vis.aggs[0].fieldFormatter()).to.be(vis.aggs[0].field().format.getConverterFor());
+
+        vis = new Vis(indexPattern, {
+          type: 'metric',
+          aggs: [
+            {
+              type: 'count',
+              schema: 'metric',
+              params: { field: '@timestamp' }
+            }
+          ]
+        });
+        expect(vis.aggs[0].fieldFormatter()).to.be(fieldFormat.getDefaultInstance('number').getConverterFor());
+      });
+
+      it('returns the string format if the field does not have a format', function () {
+        var vis = new Vis(indexPattern, {
+          type: 'histogram',
+          aggs: [
+            {
+              type: 'date_histogram',
+              schema: 'segment',
+              params: { field: '@timestamp' }
+            }
+          ]
+        });
+
+        var agg = vis.aggs[0];
+        agg.params.field = { type: 'date', format: null };
+        expect(agg.fieldFormatter()).to.be(fieldFormat.getDefaultInstance('string').getConverterFor());
+      });
+
+      it('returns the string format if their is no field', function () {
+        var vis = new Vis(indexPattern, {
+          type: 'histogram',
+          aggs: [
+            {
+              type: 'date_histogram',
+              schema: 'segment',
+              params: { field: '@timestamp' }
+            }
+          ]
+        });
+
+        var agg = vis.aggs[0];
+        delete agg.params.field;
+        expect(agg.fieldFormatter()).to.be(fieldFormat.getDefaultInstance('string').getConverterFor());
+      });
+
+      it('returns the html converter if "html" is passed in', function () {
+        var vis = new Vis(indexPattern, {
+          type: 'histogram',
+          aggs: [
+            {
+              type: 'avg',
+              schema: 'metric',
+              params: { field: 'ssl' }
+            }
+          ]
+        });
+
+        var field = indexPattern.fields.byName.ssl;
+        expect(vis.aggs[0].fieldFormatter('html')).to.be(field.format.getConverterFor('html'));
       });
     });
   }];

@@ -1,12 +1,5 @@
 module.exports = function (grunt) {
   var config = {
-    test: {
-      files: [
-        '<%= unitTestDir %>/**/*.js'
-      ],
-      tasks: ['mocha:unit']
-    },
-
     less: {
       files: [
         '<%= app %>/**/styles/**/*.less',
@@ -15,7 +8,7 @@ module.exports = function (grunt) {
         '<%= app %>/**/components/**/*.less',
         '<%= app %>/**/components/vislib/components/styles/**/*.less'
       ],
-      tasks: ['less']
+      tasks: ['less:dev']
     },
 
     jade: {

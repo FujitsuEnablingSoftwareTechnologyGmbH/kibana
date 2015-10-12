@@ -1,6 +1,5 @@
 define(function (require) {
   return function PointSeriesTooltipFormatter($compile, $rootScope) {
-    var _ = require('lodash');
     var $ = require('jquery');
 
     var $tooltipScope = $rootScope.$new();
@@ -13,7 +12,8 @@ define(function (require) {
 
       var details = $tooltipScope.details = [];
       var result = { $parent: datum.aggConfigResult };
-      while ((result = result.$parent) && result.aggConfig) {
+
+      function addDetail(result) {
         var agg = result.aggConfig;
         var value = result.value;
 
@@ -31,6 +31,12 @@ define(function (require) {
 
         details.push(detail);
       }
+
+      datum.extraMetrics.forEach(addDetail);
+      while ((result = result.$parent) && result.aggConfig) {
+        addDetail(result);
+      }
+
 
       $tooltipScope.$apply();
       return $tooltip[0].outerHTML;

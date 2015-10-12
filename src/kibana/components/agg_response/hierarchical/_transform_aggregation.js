@@ -4,20 +4,17 @@ define(function (require) {
   return function transformAggregationProvider(Private) {
     var AggConfigResult = require('components/vis/_agg_config_result');
     return function transformAggregation(agg, metric, aggData, parent) {
-      return _.map(extractBuckets(aggData), function (bucket) {
-        // Pick the appropriate value, if the metric doesn't exist then we just
-        // use the count.
-        var value = bucket.doc_count;
-        if (bucket[metric.id] && !_.isUndefined(bucket[metric.id].value)) {
-          value = bucket[metric.id].value;
-        }
+      return _.map(extractBuckets(aggData, agg), function (bucket) {
+        var aggConfigResult = new AggConfigResult(
+          agg,
+          parent && parent.aggConfigResult,
+          metric.getValue(bucket),
+          agg.getKey(bucket)
+        );
 
-        // Create the new branch record
-        var $parent = parent && parent.aggConfigResult;
-        var aggConfigResult = new AggConfigResult(agg, $parent, value, bucket.key);
         var branch = {
-          name: bucket.key,
-          size: value,
+          name: agg.fieldFormatter()(bucket.key),
+          size: aggConfigResult.value,
           aggConfig: agg,
           aggConfigResult: aggConfigResult
         };

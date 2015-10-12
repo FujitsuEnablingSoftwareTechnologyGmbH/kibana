@@ -23,6 +23,7 @@ define(function (require) {
     });
 
     this.type = SavedSearch.type;
+    this.Class = SavedSearch;
 
     this.get = function (id) {
       return (new SavedSearch(id)).init();
@@ -41,7 +42,9 @@ define(function (require) {
 
     this.find = function (searchString) {
       var self = this;
-      var body = searchString ? {
+      var body;
+      if (searchString) {
+        body = {
           query: {
             simple_query_string: {
               query: searchString + '*',
@@ -49,7 +52,11 @@ define(function (require) {
               default_operator: 'AND'
             }
           }
-        }: { query: {match_all: {}}};
+        };
+      } else {
+        body = { query: {match_all: {}}};
+      }
+
       return es.search({
         index: configFile.kibana_index,
         type: 'search',

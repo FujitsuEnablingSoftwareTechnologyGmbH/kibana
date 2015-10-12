@@ -1,5 +1,5 @@
 define(function (require) {
-  return function MapperService(Private, Promise, es, configFile) {
+  return function MapperService(Private, Promise, es, config) {
     var _ = require('lodash');
     var moment = require('moment');
 
@@ -33,7 +33,7 @@ define(function (require) {
 
         if (!skipIndexPatternCache) {
           return es.get({
-            index: configFile.kibana_index,
+            index: config.file.kibana_index,
             type: 'index-pattern',
             id: id,
             _sourceInclude: ['fields']
@@ -51,7 +51,7 @@ define(function (require) {
           promise = self.getIndicesForIndexPattern(indexPattern)
           .then(function (existing) {
             if (existing.matches.length === 0) throw new IndexPatternMissingIndices();
-            return existing.matches.slice(-5); // Grab the most recent 5
+            return existing.matches.slice(-config.get('indexPattern:fieldMapping:lookBack')); // Grab the most recent
           });
         }
 
@@ -64,15 +64,7 @@ define(function (require) {
             includeDefaults: true
           });
         })
-        .catch(function (err) {
-          if (err.status >= 400) {
-            // transform specific error type
-            throw new IndexPatternMissingIndices();
-          } else {
-            // rethrow all others
-            throw err;
-          }
-        })
+        .catch(handleMissingIndexPattern)
         .then(transformMappingIntoFields)
         .then(function (fields) {
           fieldCache.set(id, fields);
@@ -103,7 +95,8 @@ define(function (require) {
             all: all,
             matches: matches
           };
-        });
+        })
+        .catch(handleMissingIndexPattern);
       };
 
       /**
@@ -116,6 +109,16 @@ define(function (require) {
         fieldCache.clear(indexPattern);
         return Promise.resolve();
       };
+    }
+
+    function handleMissingIndexPattern(err) {
+      if (err.status >= 400) {
+        // transform specific error type
+        throw new IndexPatternMissingIndices();
+      } else {
+        // rethrow all others
+        throw err;
+      }
     }
 
     return new Mapper();

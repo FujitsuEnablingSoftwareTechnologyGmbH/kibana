@@ -3,7 +3,6 @@ define(function (require) {
   var angular = require('angular');
   var moment = require('moment');
   var ConfigTemplate = require('utils/config_template');
-  var filterManager = require('components/filter_manager/filter_manager');
   var getSort = require('components/doc_table/lib/get_sort');
   var rison = require('utils/rison');
 
@@ -11,14 +10,14 @@ define(function (require) {
 
   require('components/notify/notify');
   require('components/timepicker/timepicker');
-  require('directives/fixed_scroll');
+  require('components/fixedScroll');
   require('directives/validate_json');
   require('components/validate_query/validate_query');
   require('filters/moment');
   require('components/courier/courier');
   require('components/index_patterns/index_patterns');
   require('components/state_management/app_state');
-  require('services/timefilter');
+  require('components/timefilter/timefilter');
   require('components/highlight/highlight_tags');
 
   var app = require('modules').get('apps/discover', [
@@ -69,15 +68,26 @@ define(function (require) {
     var docTitle = Private(require('components/doc_title/doc_title'));
     var brushEvent = Private(require('utils/brush_event'));
     var HitSortFn = Private(require('plugins/discover/_hit_sort_fn'));
-    var filterBarWatchFilters = Private(require('components/filter_bar/lib/watchFilters'));
+    var queryFilter = Private(require('components/filter_bar/query_filter'));
+    var filterManager = Private(require('components/filter_manager/filter_manager'));
 
     var notify = new Notifier({
       location: 'Discover'
     });
 
+    $scope.intervalOptions = Private(require('components/agg_types/buckets/_interval_options'));
+    $scope.showInterval = false;
+
+    $scope.intervalEnabled = function (interval) {
+      return interval.val !== 'custom';
+    };
+
+    $scope.toggleInterval = function () {
+      $scope.showInterval = !$scope.showInterval;
+    };
+
     // config panel templates
     $scope.configTemplate = new ConfigTemplate({
-      config: require('text!plugins/discover/partials/settings.html'),
       load: require('text!plugins/discover/partials/load_search.html'),
       save: require('text!plugins/discover/partials/save_search.html')
     });
@@ -105,15 +115,16 @@ define(function (require) {
         columns: savedSearch.columns || ['_source'],
         index: $scope.indexPattern.id,
         interval: 'auto',
-        filters: _.cloneDeep($scope.searchSource.get('filter'))
+        filters: _.cloneDeep($scope.searchSource.getOwn('filter'))
       };
     }
 
     $state.index = $scope.indexPattern.id;
     $state.sort = getSort.array($state.sort, $scope.indexPattern);
 
-    var metaFields = config.get('metaFields');
-    filterManager.init($state);
+    $scope.$watchCollection('state.columns', function () {
+      $state.save();
+    });
 
     $scope.opts = {
       // number of records to fetch, then paginate through
@@ -135,47 +146,9 @@ define(function (require) {
         $scope.failuresShown = showTotal;
       };
 
-      // stores the complete list of fields
-      $scope.fields = _($scope.indexPattern.fields)
-      .sortBy('name')
-      .transform(function (fields, field) {
-        // clone the field with Object.create so that it's getters
-        // and non-enumerable props are preserved
-        var clone = Object.create(field);
-        clone.display = _.contains($state.columns, field.name);
-        clone.rowCount = $scope.rows ? $scope.rows.fieldCounts[field.name] : 0;
-        fields.push(clone);
-      }, [])
-      .value();
-
-      refreshColumns();
-
-      // listen for changes, and relisten everytime something happens
-      $scope.$listen($state, 'fetch_with_changes', updateFields);
-      $scope.$listen($state, 'reset_with_changes', updateFields);
-      function updateFields(changes) {
-        var newColumns = _.contains(changes, 'columns');
-        var newIndex = _.contains(changes, 'index');
-        var otherChanges = _.pull(changes, 'index', 'columns');
-
-        if (newIndex) {
-          // we will be reloading, don't need to juggle state
-          return;
-        }
-
-        if (newColumns) {
-          $scope.fields.forEach(function (field) {
-            field.display = _.contains($state.columns, field.name);
-          });
-          refreshColumns();
-        }
-
-        if (otherChanges.length) $scope.fetch();
-      }
-
       $scope.updateDataSource()
       .then(function () {
-        $scope.$listen(timefilter, 'update', function () {
+        $scope.$listen(timefilter, 'fetch', function () {
           $scope.fetch();
         });
 
@@ -189,29 +162,41 @@ define(function (require) {
           if (!angular.equals(sort, currentSort)) $scope.fetch();
         });
 
-        filterBarWatchFilters($scope)
-        .on('update', function () {
+        // update data source when filters update
+        $scope.$listen(queryFilter, 'update', function () {
           return $scope.updateDataSource().then(function () {
             $state.save();
           });
-        })
-        .on('fetch', $scope.fetch);
+        });
+
+        // update data source when hitting forward/back and the query changes
+        $scope.$listen($state, 'fetch_with_changes', function (diff) {
+          if (diff.indexOf('query') >= 0) $scope.fetch();
+        });
+
+        // fetch data when filters fire fetch event
+        $scope.$listen(queryFilter, 'fetch', $scope.fetch);
 
         $scope.$watch('opts.timefield', function (timefield) {
           timefilter.enabled = !!timefield;
         });
 
-        $scope.$watch('opts.index', changeIndexPattern($scope.opts, $state));
-        $scope.$watch('state.index', changeIndexPattern($state, $scope.opts));
-        function changeIndexPattern(from, to) {
-          return function () {
-            if (from.index === to.index) return;
+        $scope.$watch('state.interval', function (interval, oldInterval) {
+          if (interval !== oldInterval && interval === 'auto') {
+            $scope.showInterval = false;
+          }
+          $scope.fetch();
+        });
 
-            to.index = from.index;
-            if (to === $state) $state.save();
-            $route.reload();
-          };
-        }
+        $scope.$watch('vis.aggs', function () {
+          var buckets = $scope.vis.aggs.bySchemaGroup.buckets;
+
+          if (buckets && buckets.length === 1) {
+            $scope.intervalName = 'by ' + buckets[0].buckets.getInterval().description;
+          } else {
+            $scope.intervalName = 'auto';
+          }
+        });
 
         $scope.$watchMulti([
           'rows',
@@ -224,7 +209,7 @@ define(function (require) {
             NO_RESULTS: 'none' // no results came back
           };
 
-          function pick(rows, oldRows, fetchStatus, oldFetchStatus) {
+          function pick(rows, oldRows, fetchStatus) {
             // initial state, pretend we are loading
             if (rows == null && oldRows == null) return status.LOADING;
 
@@ -300,10 +285,6 @@ define(function (require) {
 
       $scope.updateTime();
 
-      if (_.isEmpty($state.columns)) {
-        refreshColumns();
-      }
-
       $scope.updateDataSource()
       .then(setupVisualization)
       .then(function () {
@@ -319,7 +300,7 @@ define(function (require) {
         $scope.hits = 0;
         $scope.faliures = [];
         $scope.rows = [];
-        $scope.rows.fieldCounts = {};
+        $scope.fieldCounts = {};
       }
 
       if (!$scope.rows) flushResponseData();
@@ -350,8 +331,8 @@ define(function (require) {
       }
 
       $scope.updateTime();
-
       segmented.setDirection(sortBy === 'time' ? (sort[1] || 'desc') : 'desc');
+      segmented.setSize(sortBy === 'time' ? $scope.opts.sampleSize : false);
 
       // triggered when the status updated
       segmented.on('status', function (status) {
@@ -371,47 +352,39 @@ define(function (require) {
         }
 
         var rows = $scope.rows;
-        var counts = rows.fieldCounts;
+        var indexPattern = $scope.searchSource.get('index');
 
         // merge the rows and the hits, use a new array to help watchers
         rows = $scope.rows = rows.concat(resp.hits.hits);
-        rows.fieldCounts = counts;
 
         if (sortFn) {
-          rows.sort(sortFn);
-          rows = $scope.rows = rows.slice(0, totalSize);
-          counts = rows.fieldCounts = {};
+          notify.event('resort rows', function () {
+            rows.sort(sortFn);
+            rows = $scope.rows = rows.slice(0, totalSize);
+            $scope.fieldCounts = {};
+          });
         }
 
-        $scope.rows.forEach(function (hit) {
-          // skip this work if we have already done it and we are NOT sorting.
-          // ---
-          // when we are sorting results, we need to redo the counts each time because the
-          // "top 500" may change with each response
-          if (hit.$$_formatted && !sortFn) return;
+        notify.event('flatten hit and count fields', function () {
+          var counts = $scope.fieldCounts;
+          $scope.rows.forEach(function (hit) {
+            // skip this work if we have already done it and we are NOT sorting.
+            // ---
+            // when we are sorting results, we need to redo the counts each time because the
+            // "top 500" may change with each response
+            if (hit.$$_counted && !sortFn) return;
+            hit.$$_counted = true;
 
-          // Flatten the fields
-          hit.$$_flattened = $scope.indexPattern.flattenHit(hit);
-
-          var formatAndCount = function (value, name) {
-            // add up the counts for each field name
-            counts[name] = counts[name] ? counts[name] + 1 : 1;
-
-            var defaultFormat = courier.indexPatterns.fieldFormats.defaultByType.string;
-            var field = $scope.indexPattern.fields.byName[name];
-            var formatter = (field && field.format) ? field.format : defaultFormat;
-
-            return formatter.convert(value);
-          };
-
-          hit.$$_formatted = _.mapValues(hit.$$_flattened, formatAndCount);
+            var fields = _.keys(indexPattern.flattenHit(hit));
+            var n = fields.length;
+            var field;
+            while (field = fields[--n]) {
+              if (counts[field]) counts[field] += 1;
+              else counts[field] = 1;
+            }
+          });
         });
 
-        // apply the field counts to the field list
-        // We could do this in the field_chooser but it would us to iterate the array again
-        $scope.fields.forEach(function (field) {
-          field.rowCount = counts[field.name] || 0;
-        });
       }));
 
       segmented.on('mergedSegment', function (merged) {
@@ -452,19 +425,11 @@ define(function (require) {
       .highlight({
         pre_tags: [highlightTags.pre],
         post_tags: [highlightTags.post],
-        fields: {'*': {}}
+        fields: {'*': {}},
+        fragment_size: 2147483647 // Limit of an integer.
       })
-      .set('filter', $state.filters || []);
+      .set('filter', queryFilter.getFilters());
     });
-
-    // This is a hacky optimization for comparing the contents of a large array to a short one.
-    function arrayToKeys(array, value) {
-      var obj = {};
-      _.each(array, function (key) {
-        obj[key] = value || true;
-      });
-      return obj;
-    }
 
     // TODO: On array fields, negating does not negate the combination, rather all terms
     $scope.filterQuery = function (field, values, operation) {
@@ -472,65 +437,8 @@ define(function (require) {
       filterManager.add(field, values, operation, $state.index);
     };
 
-    $scope.toggleField = function (name) {
-      var field = _.find($scope.fields, { name: name });
-
-      // If we can't find the field in the mapping, ensure it isn't in the column list and abort
-      if (!field) {
-        $state.columns = _.without($state.columns, name);
-        return;
-      }
-
-      // toggle the display property
-      field.display = !field.display;
-
-      if ($state.columns.length === 1 && $state.columns[0] === '_source') {
-        $state.columns = _.toggleInOut($state.columns, name);
-        $state.columns = _.toggleInOut($state.columns, '_source');
-        _.find($scope.fields, {name: '_source'}).display = false;
-      } else {
-        $state.columns = _.toggleInOut($state.columns, name);
-      }
-
-      refreshColumns();
-    };
-
     $scope.toTop = function () {
       $window.scrollTo(0, 0);
-    };
-
-    function refreshColumns() {
-      // Get all displayed field names;
-      var fields = _($scope.fields).filter('display').pluck('name').value();
-
-      // Make sure there are no columns added that aren't in the displayed field list.
-      $state.columns = _.intersection($state.columns, fields);
-
-      // If no columns remain, use _source
-      if (!$state.columns.length) {
-        $scope.toggleField('_source');
-        return;
-      }
-
-      if (init.complete) {
-        $state.save();
-      }
-    }
-
-    // TODO: Move to utility class
-    var addSlashes = function (str) {
-      if (!_.isString(str)) return str;
-      str = str.replace(/\\/g, '\\\\');
-      str = str.replace(/\'/g, '\\\'');
-      str = str.replace(/\"/g, '\\"');
-      str = str.replace(/\0/g, '\\0');
-      return str;
-    };
-
-    // TODO: Move to utility class
-    // https://stackoverflow.com/questions/3561493/is-there-a-regexp-escape-function-in-javascript
-    var regexEscape = function (str) {
-      return str.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
     };
 
     var loadingVis;
@@ -539,22 +447,36 @@ define(function (require) {
       if (!$scope.opts.timefield) return Promise.resolve();
       if (loadingVis) return loadingVis;
 
+      var visStateAggs = [
+        {
+          type: 'count',
+          schema: 'metric'
+        },
+        {
+          type: 'date_histogram',
+          schema: 'segment',
+          params: {
+            field: $scope.opts.timefield,
+            interval: $state.interval,
+            min_doc_count: 0
+          }
+        }
+      ];
 
-      // we shouldn't have a vis, delete it
-      if (!$scope.opts.timefield && $scope.vis) {
-        $scope.vis.destroy();
-        $scope.searchSource.set('aggs', undefined);
-        delete $scope.vis;
+      // we have a vis, just modify the aggs
+      if ($scope.vis) {
+        var visState = $scope.vis.getState();
+        visState.aggs = visStateAggs;
+
+        $scope.vis.setState(visState);
+        return Promise.resolve($scope.vis);
       }
 
-      // we shouldn't have one, or already do, return whatever we already have
-      if (!$scope.opts.timefield || $scope.vis) return Promise.resolve($scope.vis);
-
-      // TODO: a legit way to update the index pattern
       $scope.vis = new Vis($scope.indexPattern, {
         type: 'histogram',
         params: {
           addLegend: false,
+          addTimeMarker: true
         },
         listeners: {
           click: function (e) {
@@ -565,21 +487,7 @@ define(function (require) {
           },
           brush: brushEvent
         },
-        aggs: [
-          {
-            type: 'count',
-            schema: 'metric'
-          },
-          {
-            type: 'date_histogram',
-            schema: 'segment',
-            params: {
-              field: $scope.opts.timefield,
-              interval: 'auto',
-              min_doc_count: 0
-            }
-          }
-        ]
+        aggs: visStateAggs
       });
 
       $scope.searchSource.aggs(function () {

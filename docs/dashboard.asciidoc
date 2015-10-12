@@ -8,7 +8,7 @@ dashboard to share or reload at a later time.
 image:images/NYCTA-Dashboard.jpg[Example dashboard]
 
 [float]
-[[getting-started]]
+[[dashboard-getting-started]]
 === Getting Started
 
 You need at least one saved <<visualize, visualization>> to use a dashboard.
@@ -22,6 +22,10 @@ The first time you click the *Dashboard* tab, Kibana displays an empty dashboard
 image:images/NewDashboard.jpg[New Dashboard screen]
 
 Build your dashboard by adding visualizations.
+
+[float]
+[[dash-autorefresh]]
+include::autorefresh.asciidoc[]
 
 [float]
 [[adding-visualizations-to-a-dashboard]]
@@ -41,7 +45,9 @@ container>>.
 ==== Saving Dashboards
 
 To save the dashboard, click the *Save Dashboard* button in the toolbar panel, enter a name for the dashboard in the 
-*Save As* field, and click the *Save* button.
+*Save As* field, and click the *Save* button. By default, dashboards store the time period specified in the time filter 
+when you save a dashboard. To disable this behavior, clear the *Store time with dashboard* box before clicking the 
+*Save* button.
 
 [float]
 [[loading-a-saved-dashboard]]
@@ -127,9 +133,17 @@ grid includes the query duration, the request duration, the total number of reco
 index pattern used to make the query.
 image:images/NYCTA-Statistics.jpg[]
 
+To export the raw data behind the visualization as a comma-separated-values (CSV) file, click on either the
+*Raw* or *Formatted* links at the bottom of any of the detailed information tabs. A raw export contains the data as it 
+is stored in Elasticsearch. A formatted export contains the results of any applicable Kibana [field formatters].
+
 [float]
 [[changing-the-visualization]]
 === Changing the Visualization
 
 Click the _Edit_ button image:images/EditVis.png[Pencil button] at the top right of a container to open the 
 visualization in the <<visualize,Visualize>> page.
+
+[float]
+[[dashboard-filters]]
+include::filter-pinning.asciidoc[]

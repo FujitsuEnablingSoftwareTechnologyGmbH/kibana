@@ -1,33 +1,26 @@
-/* global sinon */
 define(function (require) {
   describe('Filter Bar Directive', function () {
     describe('mapRange()', function () {
-
-			var mapRange, $rootScope, indexPattern, getIndexPatternStub;
-			beforeEach(module('kibana'));
+      var sinon = require('test_utils/auto_release_sinon');
+      var mapRange, $rootScope;
+      beforeEach(module('kibana'));
 
       beforeEach(function () {
-        getIndexPatternStub = sinon.stub();
         module('kibana/courier', function ($provide) {
-          $provide.service('courier', function () {
-            var courier = { indexPatterns: { get: getIndexPatternStub } };
-            return courier;
-          });
+          $provide.service('courier', require('fixtures/mock_courier'));
         });
       });
 
-			beforeEach(inject(function (Private, _$rootScope_, Promise) {
+      beforeEach(inject(function (Private, _$rootScope_) {
         mapRange = Private(require('components/filter_bar/lib/mapRange'));
-				$rootScope = _$rootScope_;
-        indexPattern = Private(require('fixtures/stubbed_logstash_index_pattern'));
-        getIndexPatternStub.returns(Promise.resolve(indexPattern));
-			}));
+        $rootScope = _$rootScope_;
+      }));
 
       it('should return the key and value for matching filters with gt/lt', function (done) {
         var filter = { meta: { index: 'logstash-*' }, range: { bytes: { lt: 2048, gt: 1024 } } };
         mapRange(filter).then(function (result) {
           expect(result).to.have.property('key', 'bytes');
-          expect(result).to.have.property('value', '1024 to 2048');
+          expect(result).to.have.property('value', '1,024 to 2,048');
           done();
         });
         $rootScope.$apply();
@@ -37,7 +30,7 @@ define(function (require) {
         var filter = { meta: { index: 'logstash-*' }, range: { bytes: { lte: 2048, gte: 1024 } } };
         mapRange(filter).then(function (result) {
           expect(result).to.have.property('key', 'bytes');
-          expect(result).to.have.property('value', '1024 to 2048');
+          expect(result).to.have.property('value', '1,024 to 2,048');
           done();
         });
         $rootScope.$apply();

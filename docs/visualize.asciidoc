@@ -9,7 +9,7 @@ data source types:
 * A saved search
 * An existing saved visualization
 
-Visualizations are based on the {ref}/search-aggregations.html[aggregation] feature introduced in Elasticsearch 1. 
+Visualizations are based on the {ref}/search-aggregations.html[aggregation] feature introduced in Elasticsearch 1.x. 
 
 [float]
 [[createvis]]
@@ -23,9 +23,19 @@ button] in the toolbar to the right of the search bar. The wizard guides you thr
 [[newvis01]]
 ==== Step 1: Choose the Visualization Type
 
-The New Visualization wizard starts with the following page:
+Choose a visualization type when you start the New Visualization wizard:
 
-image:images/NewViz01.jpg[]
+[horizontal]
+<<area-chart,Area chart>>:: Use area charts to visualize the total contribution of several different series.
+<<data-table,Data table>>:: Use data tables to display the raw data of a composed aggregation. You can display the data 
+table for several other visualizations by clicking at the bottom of the visualization.
+<<line-chart,Line chart>>:: Use line charts to compare different series.
+<<markdown-widget,Markdown widget>>:: Use the Markdown widget to display free-form information or instructions about your 
+dashboard.
+<<metric-chart,Metric>>:: Use the metric visualization to display a single number on your dashboard.
+<<pie-chart,Pie chart>>:: Use pie charts to display each source's contribution to a total.
+<<tilemap,Tile map>>:: Use tile maps to associate the results of an aggregation with geographic points.
+<<vertical-bar-chart,Vertical bar chart>>:: Use vertical bar charts as a general-purpose chart.
 
 You can also load a saved visualization that you created earlier. The saved visualization selector includes a text 
 field to filter by visualization name and a link to the Object Editor, accessible through *Settings > Edit Saved 
@@ -43,8 +53,6 @@ You can choose a new or saved search to serve as the data source for your visual
 an index or a set of indexes. When you select _new search_ on a system with multiple indices configured, select an 
 index pattern from the drop-down to bring up the visualization editor. 
 
-// How is this drop-down populated? Is it just a list of all indices in the cluster? Can I configure the contents?
-
 When you create a visualization from a saved search and save the visualization, the search is tied to the visualization.
 When you make changes to the search that is linked to the visualization, the visualization updates automatically.
 
@@ -60,6 +68,10 @@ main elements:
 3. <<preview-canvas,Preview Canvas>>
 
 image:images/VizEditor.jpg[]
+
+[float]
+[[viz-autorefresh]]
+include::autorefresh.asciidoc[]
 
 [float]
 [[toolbar-panel]]
@@ -81,7 +93,7 @@ Use the aggregation builder on the left of the page to configure the {ref}/searc
 visualization. Buckets are analogous to SQL `GROUP BY` statements. For more information on aggregations, see the main
 {ref}/search-aggregations.html[Elasticsearch aggregations reference].
 
-In bar or line chart visualizations, use _metrics_ for the y-axis and _buckets_ are used for the x-axis, segment bar 
+Bar, line, or area chart visualizations use _metrics_ for the y-axis and _buckets_ are used for the x-axis, segment bar 
 colors, and row/column splits. For pie charts, use the metric for the slice size and the bucket for the number of 
 slices.
 
@@ -116,7 +128,15 @@ inside each bucket, which in this example is a one-hour interval.
 
 NOTE: Remember, each subsequent bucket slices the data from the previous bucket.
 
-To render the visualization on the _preview canvas_, click the *Apply* button at the bottom of the aggregation builder.
+To render the visualization on the _preview canvas_, click the green *Apply Changes* button at the top right of the
+Aggregation Builder.
+
+You can learn more about aggregation and how altering the order of aggregations affects your visualizations 
+https://www.elastic.co/blog/kibana-aggregation-execution-order-and-you[here]. 
+
+[float]
+[[visualize-filters]]
+include::filter-pinning.asciidoc[]
 
 [float]
 [[preview-canvas]]
@@ -124,3 +144,19 @@ To render the visualization on the _preview canvas_, click the *Apply* button at
 
 The preview canvas displays a preview of the visualization you've defined in the aggregation builder. To refresh the 
 visualization preview, clicking the *Refresh* button image:images/K4Refresh.png[Refresh button] on the toolbar.
+
+include::area.asciidoc[]
+
+include::datatable.asciidoc[]
+
+include::line.asciidoc[]
+
+include::markdown.asciidoc[]
+
+include::metric.asciidoc[]
+
+include::pie.asciidoc[]
+
+include::tilemap.asciidoc[]
+
+include::vertbar.asciidoc[]

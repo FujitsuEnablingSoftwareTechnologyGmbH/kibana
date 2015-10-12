@@ -65,17 +65,17 @@ define(function (require) {
       }
 
       // map the split aggregations into rows.
-      var rows = _.map(extractBuckets(aggData), function (bucket) {
+      var rows = _.map(extractBuckets(aggData, firstAgg), function (bucket) {
         var agg = firstAgg._next;
         var split = buildSplit(agg, metric, bucket[agg.id]);
         // Since splits display labels we need to set it.
-        split.label = firstAgg.fieldFormatter()(bucket.key);
+        split.label = firstAgg.fieldFormatter()(agg.getKey(bucket));
 
         var displayName = firstAgg.fieldDisplayName();
         if (!_.isEmpty(displayName)) split.label += ': ' + displayName;
 
         split.tooltipFormatter = tooltipFormatter(raw.columns);
-        var aggConfigResult = new AggConfigResult(firstAgg, null, null, bucket.key);
+        var aggConfigResult = new AggConfigResult(firstAgg, null, null, firstAgg.getKey(bucket));
         split.split = { aggConfig: firstAgg, aggConfigResult: aggConfigResult, key: bucket.key };
         _.each(split.slices.children, function (child) {
           child.aggConfigResult.$parent = aggConfigResult;

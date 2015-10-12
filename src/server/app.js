@@ -36,7 +36,6 @@ if (app.get('env') === 'development') {
 
 app.use('/elasticsearch', require('./lib/keystone'));
 app.use('/elasticsearch', proxy);
-app.use('/enforcer', require('./lib/enforce'));
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: false}));

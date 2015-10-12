@@ -5,8 +5,15 @@ define(function (require) {
     var BucketAggType = Private(require('components/agg_types/buckets/_bucket_agg_type'));
     var TimeBuckets = Private(require('components/time_buckets/time_buckets'));
     var createFilter = Private(require('components/agg_types/buckets/create_filter/date_histogram'));
+    var intervalOptions = Private(require('components/agg_types/buckets/_interval_options'));
 
     var tzOffset = moment().format('Z');
+
+    function getInterval(agg) {
+      var interval = _.get(agg, ['params', 'interval']);
+      if (interval && interval.val === 'custom') interval = _.get(agg, ['params', 'customInterval']);
+      return interval;
+    }
 
     function setBounds(agg, force) {
       if (agg.buckets._alreadySet && !force) return;
@@ -15,6 +22,7 @@ define(function (require) {
     }
 
     require('filters/field_type');
+    require('components/validateDateInterval');
 
     return new BucketAggType({
       name: 'date_histogram',
@@ -37,7 +45,7 @@ define(function (require) {
               if (buckets) return buckets;
 
               buckets = new TimeBuckets();
-              buckets.setInterval(_.get(this, ['params', 'interval']));
+              buckets.setInterval(getInterval(this));
               setBounds(this);
 
               return buckets;
@@ -53,6 +61,10 @@ define(function (require) {
             return agg.vis.indexPattern.timeFieldName;
           },
           onChange: function (agg) {
+            if (_.get(agg, 'params.interval.val') === 'auto' && !agg.fieldIsTimeField()) {
+              delete agg.params.interval;
+            }
+
             setBounds(agg, true);
           }
         },
@@ -60,15 +72,23 @@ define(function (require) {
         {
           name: 'interval',
           type: 'optioned',
+          deserialize: function (state) {
+            var interval = _.find(intervalOptions, {val: state});
+            return interval || _.find(intervalOptions, function (option) {
+              // For upgrading from 4.0.x to 4.1.x - intervals are now stored as 'y' instead of 'year',
+              // but this maps the old values to the new values
+              return Number(moment.duration(1, state)) === Number(moment.duration(1, option.val));
+            });
+          },
           default: 'auto',
-          options: Private(require('components/agg_types/buckets/_interval_options')),
+          options: intervalOptions,
           editor: require('text!components/agg_types/controls/interval.html'),
           onRequest: function (agg) {
             setBounds(agg, true);
           },
           write: function (agg, output) {
             setBounds(agg);
-            agg.buckets.setInterval(agg.params.interval);
+            agg.buckets.setInterval(getInterval(agg));
 
             var interval = agg.buckets.getInterval();
             output.bucketInterval = interval;
@@ -79,7 +99,7 @@ define(function (require) {
             var scaleMetrics = interval.scaled && interval.scale < 1;
             if (scaleMetrics) {
               scaleMetrics = _.every(agg.vis.aggs.bySchemaGroup.metrics, function (agg) {
-                return agg.type.name === 'count' || agg.type.name === 'sum';
+                return agg.type && (agg.type.name === 'count' || agg.type.name === 'sum');
               });
             }
 
@@ -88,6 +108,12 @@ define(function (require) {
               output.metricScaleText = interval.preScaled.description;
             }
           }
+        },
+
+        {
+          name: 'customInterval',
+          default: '2h',
+          write: _.noop
         },
 
         {

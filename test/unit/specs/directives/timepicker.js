@@ -16,7 +16,8 @@ define(function (require) {
   require('plugins/discover/index');
 
   var $parentScope, $scope, $elem;
-  var clock, anchor = '2014-01-01T06:06:06.666Z';
+  var anchor = '2014-01-01T06:06:06.666Z';
+  var clock;
 
   var init = function () {
     // Load the application
@@ -51,6 +52,7 @@ define(function (require) {
         ' from="timefilter.time.from"' +
         ' to="timefilter.time.to"' +
         ' mode="timefilter.time.mode"' +
+        ' active-tab="timefilter.timepickerActiveTab"' +
         ' interval="timefilter.refreshInterval">' +
         '</kbn-timepicker>'
       );
@@ -107,6 +109,43 @@ define(function (require) {
         $scope.setRefreshInterval({ value : 1000});
         $elem.scope().$digest();
         expect($courier.searchLooper.loopInterval()).to.be(1000);
+        done();
+      });
+
+      it('should disable the looper when paused', function (done) {
+        $scope.setRefreshInterval({ value : 1000, pause: true});
+        $elem.scope().$digest();
+        expect($courier.searchLooper.loopInterval()).to.be(0);
+        expect($scope.interval.value).to.be(1000);
+        done();
+      });
+
+      it('but keep interval.value set', function (done) {
+        $scope.setRefreshInterval({ value : 1000, pause: true});
+        $elem.scope().$digest();
+        expect($scope.interval.value).to.be(1000);
+        done();
+      });
+
+      it('should unpause when setRefreshInterval is called without pause:true', function (done) {
+        $scope.setRefreshInterval({ value : 1000, pause: true});
+        expect($scope.interval.pause).to.be(true);
+
+        $scope.setRefreshInterval({ value : 1000, pause: false});
+        expect($scope.interval.pause).to.be(false);
+
+        $scope.setRefreshInterval({ value : 1000});
+        expect($scope.interval.pause).to.be(false);
+
+        done();
+      });
+
+
+      it('should highlight the current active interval', function (done) {
+        $scope.setRefreshInterval({ value: 300000 });
+        $elem.scope().$digest();
+        expect($elem.find('.refresh-interval-active').length).to.be(1);
+        expect($elem.find('.refresh-interval-active').text().trim()).to.be('5 minutes');
         done();
       });
 
@@ -176,7 +215,7 @@ define(function (require) {
 
       it('has a preview of the "from" input', function (done) {
         var preview = $elem.find('.kbn-timepicker-section span[ng-show="relative.preview"]');
-        expect(preview.text()).to.be(moment().subtract(1, 'minutes').format($scope.format));
+        expect(preview.text()).to.be(moment().subtract(15, 'minutes').format($scope.format));
         done();
       });
 

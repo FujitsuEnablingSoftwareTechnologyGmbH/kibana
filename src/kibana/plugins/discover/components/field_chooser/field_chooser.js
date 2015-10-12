@@ -1,37 +1,47 @@
 define(function (require) {
   var app = require('modules').get('apps/discover');
-  var html = require('text!plugins/discover/components/field_chooser/field_chooser.html');
-  var _ = require('lodash');
-  var rison = require('utils/rison');
-  var qs = require('utils/query_string');
-  var fieldCalculator = require('plugins/discover/components/field_chooser/lib/field_calculator');
-
 
   require('directives/css_truncate');
   require('directives/field_name');
   require('filters/unique');
   require('plugins/discover/components/field_chooser/discover_field');
 
-  app.directive('discFieldChooser', function ($location, globalState, config) {
+  app.directive('discFieldChooser', function ($location, globalState, config, $route, Private) {
+    var _ = require('lodash');
+    var rison = require('utils/rison');
+    var fieldCalculator = require('plugins/discover/components/field_chooser/lib/field_calculator');
+    var FieldList = Private(require('components/index_patterns/_field_list'));
+
     return {
       restrict: 'E',
       scope: {
-        fields: '=',
-        toggle: '=',
-        data: '=',
+        columns: '=',
+        hits: '=',
+        fieldCounts: '=',
         state: '=',
         indexPattern: '=',
+        indexPatternList: '=',
         updateFilterInQuery: '=filter'
       },
-      template: html,
-      controller: function ($scope) {
+      template: require('text!plugins/discover/components/field_chooser/field_chooser.html'),
+      link: function ($scope) {
+        $scope.setIndexPattern = function (id) {
+          $scope.state.index = id;
+          $scope.state.save();
+        };
+
+        $scope.$watch('state.index', function (id, previousId) {
+          if (previousId == null || previousId === id) return;
+          $route.reload();
+        });
 
         var filter = $scope.filter = {
           props: [
             'type',
             'indexed',
             'analyzed',
-            'missing'
+            'missing',
+            'name'
           ],
           defaults: {
             missing: true
@@ -48,18 +58,21 @@ define(function (require) {
           reset: function () {
             filter.vals = _.clone(filter.defaults);
           },
+          isFieldSelected: function (field) {
+            return field.display;
+          },
           isFieldFiltered: function (field) {
             var matchFilter = (filter.vals.type == null || field.type === filter.vals.type);
             var isAnalyzed = (filter.vals.analyzed == null || field.analyzed === filter.vals.analyzed);
             var isIndexed = (filter.vals.indexed == null || field.indexed === filter.vals.indexed);
-            var rowsScritpedOrMissing = (!filter.vals.missing || field.scripted || field.rowCount > 0);
+            var scriptedOrMissing = (!filter.vals.missing || field.scripted || field.rowCount > 0);
             var matchName = (!filter.vals.name || field.name.indexOf(filter.vals.name) !== -1);
 
             return !field.display
               && matchFilter
               && isAnalyzed
               && isIndexed
-              && rowsScritpedOrMissing
+              && scriptedOrMissing
               && matchName
             ;
           },
@@ -76,51 +89,71 @@ define(function (require) {
         // set the initial values to the defaults
         filter.reset();
 
-        $scope.$watchCollection('filter.vals', function (newFieldFilters) {
+        $scope.$watchCollection('filter.vals', function () {
           filter.active = filter.getActive();
         });
 
-        var calculateFields = function (newFields) {
-          // Find the top N most popular fields
-          $scope.popularFields = _(newFields)
-          .where(function (field) {
-            return field.count > 0;
-          })
-          .sortBy('count')
-          .reverse()
-          .slice(0, config.get('fields:popularLimit'))
-          .sortBy('name')
-          .value();
-
-          // Find the top N most popular fields
-          $scope.unpopularFields = _.sortBy(_.sortBy(newFields, 'count')
-            .reverse()
-            .slice($scope.popularFields.length), 'name');
-
-          $scope.fieldTypes = _.unique(_.pluck(newFields, 'type'));
-          // push undefined so the user can clear the filter
-          $scope.fieldTypes.unshift(undefined);
+        $scope.toggle = function (fieldName) {
+          $scope.increaseFieldCounter(fieldName);
+          _.toggleInOut($scope.columns, fieldName);
         };
 
-        $scope.$watch('fields', calculateFields);
-        $scope.$watch('data', function () {
-          _.each($scope.fields, function (field) {
-            if (field.details) {
-              $scope.details(field, true);
-            }
+        $scope.$watchMulti([
+          '[]fieldCounts',
+          '[]columns',
+          '[]hits'
+        ], function (cur, prev) {
+          var newHits = cur[2] !== prev[2];
+          var fields = $scope.fields;
+          var columns = $scope.columns || [];
+          var fieldCounts = $scope.fieldCounts;
+
+          if (!fields || newHits) {
+            $scope.fields = fields = getFields();
+          }
+
+          if (!fields) return;
+
+          // group the fields into popular and up-popular lists
+          _.chain(fields)
+          .each(function (field) {
+            field.displayOrder = _.indexOf(columns, field.name) + 1;
+            field.display = !!field.displayOrder;
+            field.rowCount = fieldCounts[field.name];
+          })
+          .sortBy(function (field) {
+            return (field.count || 0) * -1;
+          })
+          .groupBy(function (field) {
+            if (field.display) return 'selected';
+            return field.count > 0 ? 'popular' : 'unpopular';
+          })
+          .tap(function (groups) {
+            groups.selected = _.sortBy(groups.selected || [], 'displayOrder');
+
+            groups.popular = groups.popular || [];
+            groups.unpopular = groups.unpopular || [];
+
+            // move excess popular fields to un-popular list
+            var extras = groups.popular.splice(config.get('fields:popularLimit'));
+            groups.unpopular = extras.concat(groups.unpopular);
+          })
+          .each(function (group, name) {
+            $scope[name + 'Fields'] = _.sortBy(group, name === 'selected' ? 'display' : 'name');
           });
+
+          // include undefined so the user can clear the filter
+          $scope.fieldTypes = _.union([undefined], _.pluck(fields, 'type'));
         });
 
-        $scope.increaseFieldCounter = function (field) {
-          $scope.indexPattern.popularizeField(field.name, 1);
+        $scope.increaseFieldCounter = function (fieldName) {
+          $scope.indexPattern.popularizeField(fieldName, 1);
         };
 
         $scope.runAgg = function (field) {
           var agg = {};
-
           var isGeoPoint = field.type === 'geo_point';
           var type = isGeoPoint ? 'tile_map' : 'histogram';
-
           // If we're visualizing a date field, and our index is time based (and thus has a time filter),
           // then run a date histogram
           if (field.type === 'date' && $scope.indexPattern.timeFieldName === field.name) {
@@ -132,8 +165,8 @@ define(function (require) {
                 interval: 'auto'
               }
             };
+
           } else if (isGeoPoint) {
-            type = 'tile_map';
             agg = {
               type: 'geohash_grid',
               schema: 'segment',
@@ -166,13 +199,7 @@ define(function (require) {
                   agg,
                   {schema: 'metric', type: 'count', 'id': '2'}
                 ]
-              },
-              metric: [{
-                agg: 'count',
-              }],
-              segment: [],
-              group: [],
-              split: [],
+              }
             })
           });
         };
@@ -180,7 +207,7 @@ define(function (require) {
         $scope.details = function (field, recompute) {
           if (_.isUndefined(field.details) || recompute) {
             field.details = fieldCalculator.getFieldValueCounts({
-              data: $scope.data,
+              hits: $scope.hits,
               field: field,
               count: 5,
               grouped: false
@@ -194,6 +221,37 @@ define(function (require) {
           }
         };
 
+        function getFields() {
+          var prevFields = $scope.fields;
+          var indexPattern = $scope.indexPattern;
+          var hits = $scope.hits;
+          var fieldCounts = $scope.fieldCounts;
+
+          if (!indexPattern || !hits || !fieldCounts) return;
+
+          var fieldSpecs = indexPattern.fields.slice(0);
+
+          var fieldNamesInDocs = _.keys(fieldCounts);
+          var fieldNamesInIndexPattern = _.keys(indexPattern.fields.byName);
+
+          _.difference(fieldNamesInDocs, fieldNamesInIndexPattern)
+          .forEach(function (unknownFieldName) {
+            fieldSpecs.push({
+              name: unknownFieldName,
+              type: 'unknown'
+            });
+          });
+
+          var fields = new FieldList(indexPattern, fieldSpecs);
+
+          if (prevFields) {
+            fields.forEach(function (field) {
+              field.details = _.get(prevFields, ['byName', field.name, 'details']);
+            });
+          }
+
+          return fields;
+        }
       }
     };
   });

@@ -35,27 +35,26 @@ define(function (require) {
       });
 
       flattenedData.forEach(function (d, i) {
-        var key = d.x;
+        var key = (_.isPlainObject(d.x)) ? d.x.toString() : d.x;
+        var prev = uniqueXValues[key];
 
-        if (uniqueXValues[key] === void 0) {
-          uniqueXValues[key] = {
-            index: i,
-            isDate: isDate,
-            isOrdered: isOrdered,
-            isNumber: _.isNumber(key)
-          };
-        } else {
-          uniqueXValues[key] = {
-            index: Math.min(i, uniqueXValues[key].index),
-            isDate: isDate,
-            isOrdered: isOrdered,
-            isNumber: _.isNumber(key)
-          };
+        if (d.xi != null) {
+          i = d.xi;
         }
 
+        if (prev) {
+          i = Math.min(i, prev.index);
+        }
+
+        uniqueXValues[key] = [d.x, {
+          index: i,
+          isDate: isDate,
+          isOrdered: isOrdered,
+          isNumber: _.isNumber(key)
+        }];
       });
 
-      return uniqueXValues;
+      return _.values(uniqueXValues);
     };
   };
 });
