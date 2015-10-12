@@ -9,7 +9,7 @@ define(function () {
         type: 'json'
       },
       'sort:options': {
-        value: '{ "unmapped_type": "boolean" }',
+        value: '{ "unmapped_type": "date" }',  // fujitsu required
         description: 'Options the Elasticsearch sort parameter',
         type: 'json'
       },

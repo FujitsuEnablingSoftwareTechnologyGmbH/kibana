@@ -59,6 +59,7 @@ var config = module.exports = {
   buildNum                : '@@buildNum',
   maxSockets              : kibana.maxSockets,
   log_file                : kibana.log_file,
+  log_level               : kibana.log_level,
   request_timeout         : kibana.request_timeout,
   ping_timeout            : kibana.ping_timeout
 };
