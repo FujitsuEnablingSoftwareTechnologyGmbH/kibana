@@ -54,6 +54,7 @@ var config = module.exports = {
   external_plugins_folder : process.env.PLUGINS_FOLDER || null,
   bundled_plugins_folder  : path.resolve(public_folder, 'plugins'),
   kibana                  : kibana,
+  keystone                : kibana.keystone,
   package                 : require(packagePath),
   htpasswd                : htpasswdPath,
   buildNum                : '@@buildNum',
