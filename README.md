@@ -4,6 +4,17 @@
 
 Kibana is an open source ([Apache Licensed](https://github.com/elastic/kibana/blob/master/LICENSE.md)), browser based analytics and search dashboard for Elasticsearch. Kibana is a snap to setup and start using. Kibana strives to be easy to get started with, while also being flexible and powerful, just like Elasticsearch.
 
+## Fujitsu's fork
+Fujitsu's fork is based on [v4.1.2](https://github.com/elastic/kibana/tree/v4.1.2).
+It exists to accomplish following goal until Kibana 4.2 final release:
+
+* keystone based authentication for **Kibana<->ElasticSearch** communication
+
+With 4.2 it is possible to create a plugin implementing the same functionality.
+
+### Building
+See [Contributing](./CONTRIBUTING.MD)
+
 ## Requirements
 
 - Elasticsearch version 1.4.4 or later
