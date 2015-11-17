@@ -13,7 +13,7 @@ It exists to accomplish following goal until Kibana 4.2 final release:
 With 4.2 it is possible to create a plugin implementing the same functionality.
 
 ### Building
-See [Contributing](./CONTRIBUTING.MD)
+See [Contributing](./CONTRIBUTING.md)
 
 ## Requirements
 
